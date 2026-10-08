@@ -1,0 +1,4 @@
+D,101,Lucifer,Golden Retriever
+C,102,Coconut,1
+D,103,Floppy,Beagle
+C,104,Mr. Midnight,0

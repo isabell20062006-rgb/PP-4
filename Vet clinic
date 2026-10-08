@@ -1,0 +1,220 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <memory>
+#include <fstream> 
+using namespace std;
+
+class Pet {
+protected:
+    int id;
+    string name;
+    string species;
+public:
+    Pet(int id, string name, string species) : id(id), name(name), species(species) {}
+    virtual ~Pet() = default;
+
+    virtual void displayDetails() const {
+        cout << "[" << id << "] " << name << " (" << species << ")";
+    }
+    int getId() const { return id; }
+    string getName() const { return name; }
+};
+
+class Dog : public Pet {
+private:
+    string breed;
+public:
+    Dog(int id, string name, string breed) : Pet(id, name, "Dog"), breed(breed) {}
+    void displayDetails() const override {
+        Pet::displayDetails();
+        cout << " | Breed: " << breed;
+    }
+};
+
+class Cat : public Pet {
+private:
+    bool isIndoor;
+public:
+    Cat(int id, string name, bool isIndoor) : Pet(id, name, "Cat"), isIndoor(isIndoor) {}
+    void displayDetails() const override {
+        Pet::displayDetails();
+        cout << " | Type: " << (isIndoor ? "Indoor" : "Outdoor");
+    }
+};
+
+class Service {
+protected:
+    double price;
+public:
+    Service(double price) : price(price) {}
+    virtual ~Service() = default;
+    
+    virtual string getServiceType() const = 0;
+    virtual void printReceiptLine() const = 0;
+    double getPrice() const { return price; }
+};
+
+class MedicalService : public Service {
+private:
+    string procedure;
+public:
+    MedicalService(double price, string proc) : Service(price), procedure(proc) {}
+    string getServiceType() const override { return "Medical: " + procedure; }
+    void printReceiptLine() const override {
+        cout << " - " << procedure << " (Medical) : $" << price << endl;
+    }
+};
+
+class GroomingService : public Service {
+private:
+    string packageSize;
+public:
+    GroomingService(double price, string size) : Service(price), packageSize(size) {}
+    string getServiceType() const override { return "Grooming (" + packageSize + ")"; }
+    void printReceiptLine() const override {
+        cout << " - Spa Grooming [" << packageSize << "] : $" << price << endl;
+    }
+};
+
+struct Appointment {
+    shared_ptr<Pet> pet;
+    shared_ptr<Service> service;
+    string timeSlot;
+};
+
+class Calendar {
+private:
+    vector<Appointment> appointments;
+public:
+    void schedule(const Appointment& appt) {
+        appointments.push_back(appt);
+    }
+
+    void displaySchedule() const {
+        if (appointments.empty()) {
+            cout << endl;
+            cout << "[INFO] No appointments booked for today." << endl;
+            return;
+        }
+        cout << endl;
+        cout << "--- TODAY'S VET CLINIC SCHEDULE ---" << endl;
+        for (const auto& appt : appointments) {
+            cout << "Time: " << appt.timeSlot << " | Patient: " << appt.pet->getName() 
+                 << " | Action: " << appt.service->getServiceType() << endl;
+        }
+    }
+};
+
+class VetClinicEngine {
+private:
+    vector<shared_ptr<Pet>> database;
+    Calendar clinicCalendar;
+
+public:
+    void loadPreloadedData() {
+        string filename = "patients.txt";
+        ifstream fileStream(filename);
+
+        if (!fileStream.is_open()) {
+            cout << "[ERROR] Could not open file '" << filename << "'. Starting with an empty database." << endl;
+            return;
+        }
+
+        string line;
+        while (getline(fileStream, line)) {
+            if (line.empty()) continue;
+            stringstream ss(line);
+            string type, idStr, name, trait;
+            
+            getline(ss, type, ',');
+            getline(ss, idStr, ',');
+            getline(ss, name, ',');
+            getline(ss, trait, ',');
+
+            int id = stoi(idStr);
+            if (type == "D") {
+                database.push_back(make_shared<Dog>(id, name, trait));
+            } else if (type == "C") {
+                database.push_back(make_shared<Cat>(id, name, trait == "1"));
+            }
+        }
+        fileStream.close(); 
+        cout << "[SUCCESS] Loaded " << database.size() << " patient profiles from '" << filename << "'." << endl;
+    }
+
+    void runUserInterface() {
+        int choice = 0;
+        while (choice != 4) {
+            cout << endl;
+            cout << "=================================" << endl;
+            cout << "      VET CLINIC DASHBOARD       " << endl;
+            cout << "=================================" << endl;
+            cout << "1. View Registered Patients" << endl;
+            cout << "2. Schedule an Appointment" << endl;
+            cout << "3. View Calendar Schedule" << endl;
+            cout << "4. Exit Application" << endl;
+            cout << "Enter selection (1-4): ";
+            cin >> choice;
+
+            if (choice == 1) {
+                cout << endl;
+                cout << "--- REGISTERED PATIENTS ---" << endl;
+                for (const auto& pet : database) {
+                    pet->displayDetails();
+                    cout << endl;
+                }
+            } 
+            else if (choice == 2) {
+                int petId, svcType;
+                string time;
+
+                cout << endl;
+                cout << "Enter Patient ID to book: ";
+                cin >> petId;
+
+                shared_ptr<Pet> selectedPet = nullptr;
+                for (const auto& pet : database) {
+                    if (pet->getId() == petId) { selectedPet = pet; break; }
+                }
+
+                if (!selectedPet) {
+                    cout << "[ERROR] Patient ID not found." << endl;
+                    continue;
+                }
+
+                cout << "Select Service Type:" << endl;
+                cout << "1. Medical Checkup ($75)" << endl;
+                cout << "2. Luxury Grooming ($45)" << endl;
+                cout << "Choice: ";
+                cin >> svcType;
+
+                shared_ptr<Service> selectedService = nullptr;
+                if (svcType == 1) {
+                    selectedService = make_shared<MedicalService>(75.00, "Vaccination & Checkup");
+                } else {
+                    selectedService = make_shared<GroomingService>(45.00, "Full Trim");
+                }
+
+                cout << "Enter Military Time Slot (e.g., 09:30, 14:00): ";
+                cin >> time;
+
+                clinicCalendar.schedule({selectedPet, selectedService, time});
+                cout << "[SUCCESS] Appointment confirmed for " << selectedPet->getName() << "!" << endl;
+            } 
+            else if (choice == 3) {
+                clinicCalendar.displaySchedule();
+            }
+        }
+        cout << endl;
+        cout << "Application closing. Have a great day!" << endl;
+    }
+};
+
+int main() {
+    VetClinicEngine clinic;
+    clinic.loadPreloadedData();
+    clinic.runUserInterface();
+    return 0;
+}
